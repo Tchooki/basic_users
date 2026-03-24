@@ -34,6 +34,9 @@ def get_connection():
 def create_tables() -> None:
     """Initialise les tables de base et les premières partitions."""
     with get_connection() as conn:
+        logger.info(
+            "Vérification et création des tables de base (users, activities)..."
+        )
         # Users
         conn.execute(
             text("""
@@ -49,18 +52,20 @@ def create_tables() -> None:
             );
         """),
         )
+        logger.info("Table 'users' vérifiée/créée.")
 
         # Activities (Partitioned)
         conn.execute(
             text("""
             CREATE TABLE IF NOT EXISTS activities (
-                id                  SERIAL PRIMARY KEY,
+                id                  SERIAL,
                 user_id             INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 activity_type       VARCHAR(50) NOT NULL,
                 activity_date       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) PARTITION BY RANGE (activity_date);
         """)
         )
+        logger.info("Table 'activities' (partitionnée) vérifiée/créée.")
 
     # Créer les partitions pour le mois actuel et le suivant
     ensure_partitions()
@@ -78,7 +83,6 @@ def ensure_partitions() -> None:
         table_name = f"activities_{month_start.strftime('%Y_%m')}"
 
         with get_connection() as conn:
-            # On utilise f-string pour l'identifiant (table_name) et text() pour les valeurs
             conn.execute(
                 text(f"""
                     CREATE TABLE IF NOT EXISTS {table_name}
@@ -87,3 +91,4 @@ def ensure_partitions() -> None:
                 """),
                 {"start": month_start, "end": next_month},
             )
+            logger.info("Partition '%s' vérifiée/créée.", table_name)
