@@ -7,3 +7,11 @@ class UserCreate(BaseModel):
     email: str
     password: str
     phone: str | None = None
+
+
+class UserRead(BaseModel):
+    id: int
+    first_name: str
+    last_name: str
+    email: str
+    phone: str | None = None

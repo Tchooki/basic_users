@@ -1,5 +1,6 @@
 import datetime as dt
 import logging
+from collections.abc import Iterator
 from contextlib import contextmanager
 
 from sqlalchemy import Connection, create_engine, text
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 @contextmanager
-def get_connection() -> Connection:
+def get_connection() -> Iterator[Connection]:
     """Context manager to get a SQLAlchemy connection from the pool."""
     with engine.connect() as conn:
         try:
