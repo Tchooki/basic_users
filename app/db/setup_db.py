@@ -1,25 +1,19 @@
 import datetime as dt
 import logging
-import os
 from contextlib import contextmanager
 
-from dotenv import load_dotenv
-from sqlalchemy import create_engine, text
+from sqlalchemy import Connection, create_engine, text
 
-load_dotenv()
+from app.core.config import config
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/postgres"
+engine = create_engine(
+    config.database_url, pool_pre_ping=True, pool_size=5, max_overflow=10
 )
-
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=5, max_overflow=10)
-
-
 logger = logging.getLogger(__name__)
 
 
 @contextmanager
-def get_connection():
+def get_connection() -> Connection:
     """Context manager to get a SQLAlchemy connection from the pool."""
     with engine.connect() as conn:
         try:
@@ -34,9 +28,7 @@ def get_connection():
 def create_tables() -> None:
     """Initialise les tables de base et les premières partitions."""
     with get_connection() as conn:
-        logger.info(
-            "Vérification et création des tables de base (users, activities)..."
-        )
+        logger.info("Checking and creating tables...")
         # Users
         conn.execute(
             text("""
@@ -52,7 +44,7 @@ def create_tables() -> None:
             );
         """),
         )
-        logger.info("Table 'users' vérifiée/créée.")
+        logger.info("Table 'users' checked/created.")
 
         # Activities (Partitioned)
         conn.execute(
@@ -65,24 +57,23 @@ def create_tables() -> None:
             ) PARTITION BY RANGE (activity_date);
         """)
         )
-        logger.info("Table 'activities' (partitionnée) vérifiée/créée.")
+        logger.info("Table 'activities' checked/created.")
 
-    # Créer les partitions pour le mois actuel et le suivant
+    # Create partitions for the current month and the next month
     ensure_partitions()
 
 
 def ensure_partitions() -> None:
-    """Crée préemptivement les partitions pour le mois en cours et le suivant."""
+    """Creates partitions for the current month and the next month."""
     today = dt.date.today().replace(day=1)
 
-    # Check for the current month and the next month
-    for i in range(2):
-        month_start = (today + dt.timedelta(days=i * 32)).replace(day=1)
-        next_month = (month_start + dt.timedelta(days=32)).replace(day=1)
+    # Check for the current month and the next month*
+    with get_connection() as conn:
+        for i in range(2):
+            month_start = (today + dt.timedelta(days=i * 32)).replace(day=1)
+            next_month = (month_start + dt.timedelta(days=32)).replace(day=1)
 
-        table_name = f"activities_{month_start.strftime('%Y_%m')}"
-
-        with get_connection() as conn:
+            table_name = f"activities_{month_start.strftime('%Y_%m')}"
             conn.execute(
                 text(f"""
                     CREATE TABLE IF NOT EXISTS {table_name}
@@ -91,4 +82,4 @@ def ensure_partitions() -> None:
                 """),
                 {"start": month_start, "end": next_month},
             )
-            logger.info("Partition '%s' vérifiée/créée.", table_name)
+            logger.info("Partition '%s' checked/created.", table_name)
